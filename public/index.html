@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NoteFlow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet"/>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; overflow: hidden; }
+    body { font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: oklch(80% 0.006 250); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: oklch(65% 0.01 250); }
+
+    .md-preview h1 { font-size: 1.7em; font-weight: 700; margin: 0.6em 0 0.4em; letter-spacing: -0.03em; line-height: 1.2; }
+    .md-preview h2 { font-size: 1.3em; font-weight: 650; margin: 0.8em 0 0.3em; letter-spacing: -0.02em; }
+    .md-preview h3 { font-size: 1.1em; font-weight: 600; margin: 0.8em 0 0.3em; }
+    .md-preview p  { margin: 0.5em 0; line-height: 1.7; }
+    .md-preview strong { font-weight: 650; }
+    .md-preview em { font-style: italic; opacity: 0.9; }
+    .md-preview code { font-family: 'DM Mono', monospace; font-size: 0.88em; padding: 1px 5px; border-radius: 4px; background: oklch(93% 0.008 250); }
+    .md-preview pre  { background: oklch(94% 0.008 250); border-radius: 8px; padding: 14px 16px; overflow-x: auto; margin: 0.8em 0; }
+    .md-preview pre code { background: none; padding: 0; font-size: 0.85em; }
+    .md-preview blockquote { border-left: 3px solid oklch(75% 0.05 255); padding-left: 12px; color: oklch(50% 0.01 250); margin: 0.6em 0; }
+    .md-preview li { margin: 0.3em 0 0.3em 1.2em; line-height: 1.65; }
+    .md-preview hr { border: none; border-top: 1px solid oklch(88% 0.007 250); margin: 1em 0; }
+
+    [data-theme="dark"] .md-preview code { background: oklch(18% 0.012 255); }
+    [data-theme="dark"] .md-preview pre  { background: oklch(11% 0.01 255); }
+    [data-theme="dark"] .md-preview blockquote { border-left-color: oklch(60% 0.1 70); color: oklch(60% 0.01 250); }
+    [data-theme="dark"] .md-preview hr   { border-top-color: oklch(24% 0.015 255); }
+
+    textarea { font-family: 'DM Mono', monospace !important; font-size: 13px !important; line-height: 1.75 !important; }
+    button, select, input { font-family: inherit; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+
+// ── API client ────────────────────────────────────────────────────────────────
+const api = {
+  async get(path) {
+    const r = await fetch(path); if (!r.ok) throw new Error(await r.text()); return r.json();
+  },
+  async post(path, body) {
+    const r = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(await r.text()); return r.json();
+  },
+  async put(path, body) {
+    const r = await fetch(path, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(await r.text()); return r.json();
+  },
+  async del(path) {
+    const r = await fetch(path, { method: 'DELETE' }); if (!r.ok) throw new Error(await r.text()); return r.json();
+  },
+};
+
+const claude = {
+  async complete(prompt) {
+    const data = await api.post('/api/ai/complete', { prompt });
+    return data.text;
+  },
+};
+
+// ── Icons ─────────────────────────────────────────────────────────────────────
+const Icons = {
+  Plus: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>,
+  Search: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.4"/><path d="M9.5 9.5L13 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>,
+  Note: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2" y="1.5" width="10" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/><path d="M4.5 5h5M4.5 7.5h5M4.5 10h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>,
+  Tag: () => <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1.5 1.5h4.5l5.5 5.5-4.5 4.5L1.5 6V1.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/><circle cx="4" cy="4" r="1" fill="currentColor"/></svg>,
+  Slack: () => <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1" y="4" width="3" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.2"/><rect x="9" y="4" width="3" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.2"/><rect x="4" y="1" width="5" height="3" rx="1.5" stroke="currentColor" strokeWidth="1.2"/><rect x="4" y="9" width="5" height="3" rx="1.5" stroke="currentColor" strokeWidth="1.2"/></svg>,
+  AI: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1l1.5 3.5L12 6l-3.5 1.5L7 11l-1.5-3.5L2 6l3.5-1.5L7 1z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg>,
+  Code: () => <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M4 4L1.5 6.5 4 9M9 4l2.5 2.5L9 9M7 2l-1 9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  Trash: () => <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 3.5h9M5 3.5V2h3v1.5M3.5 3.5l.5 7.5h5l.5-7.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  Eye: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1.5 7c1-2.5 2.8-4 5.5-4s4.5 1.5 5.5 4c-1 2.5-2.8 4-5.5 4S2.5 9.5 1.5 7z" stroke="currentColor" strokeWidth="1.3"/><circle cx="7" cy="7" r="1.8" stroke="currentColor" strokeWidth="1.3"/></svg>,
+  Edit: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2.5l2.5 2.5-7 7H2v-2.5l7-7z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg>,
+  Sparkle: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5L8 5h3.5L9 7.5 10 11 7 9l-3 2 1-3.5L2.5 5H6L7 1.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/></svg>,
+  ChevronRight: () => <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  ChevronDown: () => <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  Send: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12 2L2 6l4 2 2 4 4-10z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg>,
+  Hash: () => <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M3 4.5h7M3 8.5h7M5 2l-1 9M9 2l-1 9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>,
+  Settings: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="2" stroke="currentColor" strokeWidth="1.3"/><path d="M7 2.5V1M7 13v-1.5M2.5 7H1M13 7h-1.5M3.87 3.87l-1.06-1.06M11.19 11.19l-1.06-1.06M3.87 10.13l-1.06 1.06M11.19 2.81l-1.06 1.06" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>,
+};
+
+// ── Themes ────────────────────────────────────────────────────────────────────
+const lightTheme = {
+  bg: "oklch(98.5% 0.006 80)", bgPanel: "oklch(97% 0.007 80)", bgSidebar: "oklch(96% 0.008 80)",
+  bgCard: "oklch(100% 0 0)", bgCardHover: "oklch(97.5% 0.006 80)", bgCardActive: "oklch(95% 0.01 255)",
+  border: "oklch(90% 0.007 80)", borderStrong: "oklch(82% 0.01 250)",
+  text: "oklch(18% 0.01 250)", textSecondary: "oklch(48% 0.01 250)", textMuted: "oklch(65% 0.008 250)",
+  accent: "oklch(52% 0.17 255)", accentBg: "oklch(95% 0.05 255)", accentHover: "oklch(47% 0.17 255)",
+  tagBg: "oklch(93% 0.04 150)", tagText: "oklch(40% 0.12 150)",
+  aiPanel: "oklch(97.5% 0.012 255)", aiBorder: "oklch(88% 0.05 255)",
+  shadow: "0 1px 3px oklch(0% 0 0/0.06),0 1px 2px oklch(0% 0 0/0.04)",
+  shadowMd: "0 4px 16px oklch(0% 0 0/0.08),0 1px 4px oklch(0% 0 0/0.04)",
+};
+const darkTheme = {
+  bg: "oklch(13% 0.012 255)", bgPanel: "oklch(15% 0.012 255)", bgSidebar: "oklch(12% 0.01 255)",
+  bgCard: "oklch(17% 0.012 255)", bgCardHover: "oklch(20% 0.012 255)", bgCardActive: "oklch(22% 0.025 255)",
+  border: "oklch(24% 0.015 255)", borderStrong: "oklch(32% 0.02 255)",
+  text: "oklch(93% 0.006 80)", textSecondary: "oklch(65% 0.008 250)", textMuted: "oklch(45% 0.008 250)",
+  accent: "oklch(72% 0.14 70)", accentBg: "oklch(22% 0.04 70)", accentHover: "oklch(77% 0.14 70)",
+  tagBg: "oklch(22% 0.04 150)", tagText: "oklch(70% 0.1 150)",
+  aiPanel: "oklch(16% 0.018 70)", aiBorder: "oklch(28% 0.05 70)",
+  shadow: "0 1px 3px oklch(0% 0 0/0.3),0 1px 2px oklch(0% 0 0/0.2)",
+  shadowMd: "0 4px 16px oklch(0% 0 0/0.4),0 1px 4px oklch(0% 0 0/0.2)",
+};
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function parseMarkdown(text) {
+  if (!text) return '';
+  let html = text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/```(\w+)?\n([\s\S]*?)```/g,'<pre><code>$2</code></pre>')
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/_(.+?)_/g,'<em>$1</em>')
+    .replace(/^# (.+)$/gm,'<h1>$1</h1>')
+    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/^[-*] (.+)$/gm,'<li>$1</li>')
+    .replace(/^\d+\. (.+)$/gm,'<li>$1</li>')
+    .replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>')
+    .replace(/^---$/gm,'<hr/>')
+    .replace(/\n\n/g,'</p><p>')
+    .replace(/\n/g,'<br/>');
+  return '<p>' + html + '</p>';
+}
+
+function detectContentType(text) {
+  if (!text) return 'note';
+  const t = text.toLowerCase();
+  if ((t.includes('[') && (t.includes('am]') || t.includes('pm]'))) || (t.includes(':') && t.match(/\d{1,2}:\d{2}/))) {
+    if (t.includes('channel') || t.includes('#') || t.includes('slack') || t.match(/@\w+/)) return 'slack';
+  }
+  if (t.includes('```') || t.match(/function |const |let |var |def |class |import |export /)) return 'code';
+  if (t.includes('claude') || t.includes('assistant:') || t.includes('human:') || t.includes("i'll help")) return 'ai';
+  return 'note';
+}
+
+function formatDate(dateStr) {
+  const d = new Date(dateStr), now = new Date(), diff = now - d;
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+  if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+  if (diff < 604800000) return d.toLocaleDateString('en', { weekday: 'short' });
+  return d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+}
+
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+// ── TweaksPanel ───────────────────────────────────────────────────────────────
+const TWEAKS_CSS = `
+  .twk-panel{position:fixed;right:16px;bottom:16px;z-index:9999;width:280px;max-height:calc(100vh - 32px);
+    display:flex;flex-direction:column;background:rgba(250,249,247,.92);color:#29261b;
+    backdrop-filter:blur(24px) saturate(160%);border:.5px solid rgba(255,255,255,.6);border-radius:14px;
+    box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 12px 40px rgba(0,0,0,.18);
+    font:11.5px/1.4 ui-sans-serif,system-ui,sans-serif;overflow:hidden}
+  .twk-hd{display:flex;align-items:center;justify-content:space-between;padding:10px 8px 10px 14px;cursor:move;user-select:none}
+  .twk-hd b{font-size:12px;font-weight:600;letter-spacing:.01em}
+  .twk-x{appearance:none;border:0;background:transparent;color:rgba(41,38,27,.55);width:22px;height:22px;border-radius:6px;cursor:pointer;font-size:13px;line-height:1}
+  .twk-x:hover{background:rgba(0,0,0,.06);color:#29261b}
+  .twk-body{padding:2px 14px 14px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;min-height:0}
+  .twk-row{display:flex;flex-direction:column;gap:5px}
+  .twk-row-h{flex-direction:row;align-items:center;justify-content:space-between;gap:10px}
+  .twk-lbl{display:flex;justify-content:space-between;align-items:baseline;color:rgba(41,38,27,.72)}
+  .twk-lbl>span:first-child{font-weight:500}
+  .twk-val{color:rgba(41,38,27,.5);font-variant-numeric:tabular-nums}
+  .twk-sect{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:rgba(41,38,27,.45);padding:10px 0 0}
+  .twk-sect:first-child{padding-top:0}
+  .twk-field{appearance:none;width:100%;height:26px;padding:0 8px;border:.5px solid rgba(0,0,0,.1);border-radius:7px;background:rgba(255,255,255,.6);color:inherit;font:inherit;outline:none}
+  select.twk-field{padding-right:22px;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='rgba(0,0,0,.5)' d='M0 0h10L5 6z'/></svg>");background-repeat:no-repeat;background-position:right 8px center}
+  .twk-slider{appearance:none;width:100%;height:4px;margin:6px 0;border-radius:999px;background:rgba(0,0,0,.12);outline:none}
+  .twk-slider::-webkit-slider-thumb{appearance:none;width:14px;height:14px;border-radius:50%;background:#fff;border:.5px solid rgba(0,0,0,.12);box-shadow:0 1px 3px rgba(0,0,0,.2);cursor:pointer}
+  .twk-seg{position:relative;display:flex;padding:2px;border-radius:8px;background:rgba(0,0,0,.06);user-select:none}
+  .twk-seg-thumb{position:absolute;top:2px;bottom:2px;border-radius:6px;background:rgba(255,255,255,.9);box-shadow:0 1px 2px rgba(0,0,0,.12);transition:left .15s,width .15s}
+  .twk-seg button{position:relative;z-index:1;flex:1;border:0;background:transparent;color:inherit;font:inherit;font-weight:500;height:22px;border-radius:6px;cursor:pointer;padding:0}
+  .twk-toggle{position:relative;width:32px;height:18px;border:0;border-radius:999px;background:rgba(0,0,0,.15);transition:background .15s;cursor:pointer;padding:0;flex-shrink:0}
+  .twk-toggle[data-on="1"]{background:#34c759}
+  .twk-toggle i{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s;display:block}
+  .twk-toggle[data-on="1"] i{transform:translateX(14px)}
+  .twk-btn{appearance:none;height:26px;padding:0 12px;border:0;border-radius:7px;background:rgba(0,0,0,.78);color:#fff;font:inherit;font-weight:500;cursor:pointer;width:100%}
+  .twk-btn:hover{background:rgba(0,0,0,.88)}
+  .twk-btn.secondary{background:rgba(0,0,0,.06);color:inherit}
+  .twk-btn.secondary:hover{background:rgba(0,0,0,.1)}
+`;
+
+function useTweaks(defaults) {
+  const [values, setValues] = React.useState(defaults);
+  const setTweak = React.useCallback((key, val) => setValues(prev => ({ ...prev, [key]: val })), []);
+  return [values, setTweak];
+}
+
+function TweaksPanel({ title = 'Settings', children }) {
+  const [open, setOpen] = React.useState(false);
+  const dragRef = React.useRef(null);
+  const offsetRef = React.useRef({ x: 16, y: 16 });
+  const PAD = 16;
+
+  const clamp = React.useCallback(() => {
+    const el = dragRef.current; if (!el) return;
+    const maxR = Math.max(PAD, window.innerWidth - el.offsetWidth - PAD);
+    const maxB = Math.max(PAD, window.innerHeight - el.offsetHeight - PAD);
+    offsetRef.current = {
+      x: Math.min(maxR, Math.max(PAD, offsetRef.current.x)),
+      y: Math.min(maxB, Math.max(PAD, offsetRef.current.y)),
+    };
+    el.style.right = offsetRef.current.x + 'px';
+    el.style.bottom = offsetRef.current.y + 'px';
+  }, []);
+
+  React.useEffect(() => {
+    if (!open) return;
+    clamp();
+    const ro = new ResizeObserver(clamp);
+    ro.observe(document.documentElement);
+    return () => ro.disconnect();
+  }, [open, clamp]);
+
+  React.useEffect(() => {
+    const onMsg = e => {
+      if (e?.data?.type === '__activate_edit_mode') setOpen(true);
+      if (e?.data?.type === '__deactivate_edit_mode') setOpen(false);
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  const onDragStart = e => {
+    const el = dragRef.current; if (!el) return;
+    const r = el.getBoundingClientRect();
+    const sx = e.clientX, sy = e.clientY;
+    const sr = window.innerWidth - r.right, sb = window.innerHeight - r.bottom;
+    const move = ev => { offsetRef.current = { x: sr - (ev.clientX - sx), y: sb - (ev.clientY - sy) }; clamp(); };
+    const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
+
+  if (!open) return null;
+  return (
+    <>
+      <style>{TWEAKS_CSS}</style>
+      <div ref={dragRef} className="twk-panel" style={{ right: offsetRef.current.x, bottom: offsetRef.current.y }}>
+        <div className="twk-hd" onMouseDown={onDragStart}>
+          <b>{title}</b>
+          <button className="twk-x" onMouseDown={e => e.stopPropagation()} onClick={() => setOpen(false)}>✕</button>
+        </div>
+        <div className="twk-body">{children}</div>
+      </div>
+    </>
+  );
+}
+
+function TweakSection({ label }) {
+  return <div className="twk-sect">{label}</div>;
+}
+
+function TweakRow({ label, value, children, inline = false }) {
+  return (
+    <div className={inline ? 'twk-row twk-row-h' : 'twk-row'}>
+      <div className="twk-lbl"><span>{label}</span>{value != null && <span className="twk-val">{value}</span>}</div>
+      {children}
+    </div>
+  );
+}
+
+function TweakSlider({ label, value, min = 0, max = 100, step = 1, unit = '', onChange }) {
+  return (
+    <TweakRow label={label} value={`${value}${unit}`}>
+      <input type="range" className="twk-slider" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))} />
+    </TweakRow>
+  );
+}
+
+function TweakToggle({ label, value, onChange }) {
+  return (
+    <div className="twk-row twk-row-h">
+      <div className="twk-lbl"><span>{label}</span></div>
+      <button type="button" className="twk-toggle" data-on={value ? '1' : '0'} onClick={() => onChange(!value)}><i /></button>
+    </div>
+  );
+}
+
+function TweakRadio({ label, value, options, onChange }) {
+  const trackRef = React.useRef(null);
+  const opts = options.map(o => typeof o === 'object' ? o : { value: o, label: o });
+  const idx = Math.max(0, opts.findIndex(o => o.value === value));
+  const n = opts.length;
+  const valRef = React.useRef(value); valRef.current = value;
+
+  const segAt = x => {
+    const r = trackRef.current.getBoundingClientRect();
+    const i = Math.floor(((x - r.left - 2) / (r.width - 4)) * n);
+    return opts[Math.max(0, Math.min(n - 1, i))].value;
+  };
+
+  const onPointerDown = e => {
+    const v = segAt(e.clientX); if (v !== valRef.current) onChange(v);
+    const move = ev => { const v2 = segAt(ev.clientX); if (v2 !== valRef.current) onChange(v2); };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  return (
+    <TweakRow label={label}>
+      <div ref={trackRef} className="twk-seg" onPointerDown={onPointerDown}>
+        <div className="twk-seg-thumb" style={{ left: `calc(2px + ${idx} * (100% - 4px) / ${n})`, width: `calc((100% - 4px) / ${n})` }} />
+        {opts.map(o => <button key={o.value} type="button">{o.label}</button>)}
+      </div>
+    </TweakRow>
+  );
+}
+
+function TweakSelect({ label, value, options, onChange }) {
+  return (
+    <TweakRow label={label}>
+      <select className="twk-field" value={value} onChange={e => onChange(e.target.value)}>
+        {options.map(o => { const v = typeof o === 'object' ? o.value : o; const l = typeof o === 'object' ? o.label : o; return <option key={v} value={v}>{l}</option>; })}
+      </select>
+    </TweakRow>
+  );
+}
+
+function TweakButton({ label, onClick, secondary = false }) {
+  return <button type="button" className={secondary ? 'twk-btn secondary' : 'twk-btn'} onClick={onClick}>{label}</button>;
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+function Sidebar({ theme: t, projects, notes, selectedProject, selectedTag, onSelectProject, onSelectTag, onNewProject, onNewNote, searchQuery, onSearch }) {
+  const [expanded, setExpanded] = React.useState({ projects: true, tags: true });
+  const [newProjectName, setNewProjectName] = React.useState('');
+  const [addingProject, setAddingProject] = React.useState(false);
+
+  const allTags = React.useMemo(() => {
+    const map = {};
+    notes.forEach(n => (n.tags || []).forEach(tag => { map[tag] = (map[tag] || 0) + 1; }));
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  }, [notes]);
+
+  const projectCounts = React.useMemo(() => {
+    const map = {};
+    notes.forEach(n => { map[n.projectId] = (map[n.projectId] || 0) + 1; });
+    return map;
+  }, [notes]);
+
+  const handleAddProject = () => {
+    if (!newProjectName.trim()) return;
+    const colors = ['#5B8AF5','#52C27E','#E07B4F','#A678E2','#E0B94F','#4FC2D2'];
+    onNewProject({ id: generateId(), name: newProjectName.trim(), color: colors[projects.length % colors.length] });
+    setNewProjectName(''); setAddingProject(false);
+  };
+
+  const itemStyle = active => ({
+    display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', cursor: 'pointer',
+    userSelect: 'none', background: active ? t.bgCardActive : 'none',
+    color: active ? t.accent : t.textSecondary, fontSize: 13, transition: 'background 0.12s, color 0.12s',
+  });
+  const countStyle = { marginLeft: 'auto', fontSize: 11, color: t.textMuted, background: t.border, borderRadius: 10, padding: '0 5px' };
+
+  return (
+    <div style={{ width: 220, minWidth: 220, background: t.bgSidebar, borderRight: `1px solid ${t.border}`, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '18px 16px 12px', borderBottom: `1px solid ${t.border}` }}>
+        <div style={{ fontSize: 15, fontWeight: 650, color: t.text, letterSpacing: '-0.3px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ color: t.accent }}><Icons.Sparkle /></span>
+          NoteFlow
+          <button
+            onClick={() => window.postMessage({ type: '__activate_edit_mode' }, '*')}
+            style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: t.textMuted, display: 'flex', alignItems: 'center', padding: 2, borderRadius: 4 }}
+            title="Settings"
+          ><Icons.Settings /></button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: 8, padding: '6px 10px', color: t.textMuted }}>
+          <Icons.Search />
+          <input
+            style={{ background: 'none', border: 'none', outline: 'none', color: t.text, fontSize: 12.5, width: '100%' }}
+            placeholder="Search notes..."
+            value={searchQuery}
+            onChange={e => onSearch(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Nav */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+        <div
+          style={{ ...itemStyle(!selectedProject && !selectedTag && !searchQuery), padding: '7px 16px' }}
+          onClick={() => { onSelectProject(null); onSelectTag(null); }}
+          onMouseEnter={e => { if (selectedProject || selectedTag) e.currentTarget.style.background = t.bgCardHover; }}
+          onMouseLeave={e => { if (selectedProject || selectedTag) e.currentTarget.style.background = 'none'; }}
+        >
+          <Icons.Note /><span>All Notes</span><span style={countStyle}>{notes.length}</span>
+        </div>
+
+        {/* Projects */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 16px', cursor: 'pointer', userSelect: 'none' }}
+               onClick={() => setExpanded(e => ({ ...e, projects: !e.projects }))}>
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: t.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Projects</span>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.textMuted, padding: 0, display: 'flex' }}
+                      onClick={e => { e.stopPropagation(); setAddingProject(true); }}><Icons.Plus /></button>
+              <span style={{ color: t.textMuted }}>{expanded.projects ? <Icons.ChevronDown /> : <Icons.ChevronRight />}</span>
+            </div>
+          </div>
+          {expanded.projects && (
+            <>
+              {projects.map(p => (
+                <div key={p.id}
+                     style={itemStyle(selectedProject === p.id)}
+                     onClick={() => { onSelectProject(p.id); onSelectTag(null); }}
+                     onMouseEnter={e => { if (selectedProject !== p.id) e.currentTarget.style.background = t.bgCardHover; }}
+                     onMouseLeave={e => { if (selectedProject !== p.id) e.currentTarget.style.background = 'none'; }}>
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, flexShrink: 0 }} />
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                  <span style={countStyle}>{projectCounts[p.id] || 0}</span>
+                </div>
+              ))}
+              {addingProject && (
+                <div style={{ padding: '4px 16px' }}>
+                  <input autoFocus
+                    style={{ width: '100%', padding: '5px 8px', fontSize: 12.5, background: t.bgCard, border: `1px solid ${t.accent}`, borderRadius: 6, color: t.text, outline: 'none', boxSizing: 'border-box' }}
+                    placeholder="Project name..."
+                    value={newProjectName}
+                    onChange={e => setNewProjectName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleAddProject(); if (e.key === 'Escape') setAddingProject(false); }}
+                    onBlur={() => { if (!newProjectName.trim()) setAddingProject(false); }}
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Tags */}
+        {allTags.length > 0 && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 16px', cursor: 'pointer', userSelect: 'none' }}
+                 onClick={() => setExpanded(e => ({ ...e, tags: !e.tags }))}>
+              <span style={{ fontSize: 10.5, fontWeight: 600, color: t.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Tags</span>
+              <span style={{ color: t.textMuted }}>{expanded.tags ? <Icons.ChevronDown /> : <Icons.ChevronRight />}</span>
+            </div>
+            {expanded.tags && allTags.map(([tag, count]) => (
+              <div key={tag}
+                   style={itemStyle(selectedTag === tag)}
+                   onClick={() => { onSelectTag(tag); onSelectProject(null); }}
+                   onMouseEnter={e => { if (selectedTag !== tag) e.currentTarget.style.background = t.bgCardHover; }}
+                   onMouseLeave={e => { if (selectedTag !== tag) e.currentTarget.style.background = 'none'; }}>
+                <span style={{ color: t.tagText }}><Icons.Hash /></span>
+                <span style={{ flex: 1 }}>{tag}</span>
+                <span style={countStyle}>{count}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={{ padding: '12px 16px', borderTop: `1px solid ${t.border}` }}>
+        <button
+          style={{ width: '100%', padding: 8, background: t.accent, color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+          onClick={onNewNote}
+          onMouseEnter={e => e.currentTarget.style.background = t.accentHover}
+          onMouseLeave={e => e.currentTarget.style.background = t.accent}
+        ><Icons.Plus /> New Note</button>
+      </div>
+    </div>
+  );
+}
+
+// ── NoteList ──────────────────────────────────────────────────────────────────
+function NoteList({ theme: t, notes, selectedNote, onSelectNote, projects }) {
+  const typeColors = { slack: '#E07B4F', ai: t.accent, code: '#A678E2', note: t.textMuted };
+  const typeIcons  = { slack: <Icons.Slack />, ai: <Icons.AI />, code: <Icons.Code />, note: <Icons.Note /> };
+
+  return (
+    <div style={{ width: 240, minWidth: 240, borderRight: `1px solid ${t.border}`, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: t.bgPanel }}>
+      <div style={{ padding: '14px 16px 10px', borderBottom: `1px solid ${t.border}`, fontSize: 12, fontWeight: 600, color: t.textMuted, letterSpacing: '0.03em' }}>
+        {notes.length} {notes.length === 1 ? 'note' : 'notes'}
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {notes.length === 0 && (
+          <div style={{ padding: 32, textAlign: 'center', color: t.textMuted, fontSize: 12.5 }}>No notes yet.<br/>Create one to get started.</div>
+        )}
+        {notes.map(note => {
+          const proj = projects.find(p => p.id === note.projectId);
+          const active = selectedNote?.id === note.id;
+          const preview = note.content.replace(/[#*`_>]/g, '').replace(/\n/g, ' ').trim();
+          return (
+            <div key={note.id}
+                 style={{ padding: '12px 16px', cursor: 'pointer', borderBottom: `1px solid ${t.border}`, background: active ? t.bgCardActive : 'none', transition: 'background 0.1s' }}
+                 onClick={() => onSelectNote(note)}
+                 onMouseEnter={e => { if (!active) e.currentTarget.style.background = t.bgCardHover; }}
+                 onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'none'; }}>
+              <div style={{ fontSize: 13, fontWeight: 580, color: active ? t.accent : t.text, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {note.title || 'Untitled'}
+              </div>
+              <div style={{ fontSize: 11.5, color: t.textMuted, lineHeight: 1.45, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                {preview || 'Empty note'}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                <span style={{ color: typeColors[note.contentType] || t.textMuted, display: 'flex', alignItems: 'center' }}>
+                  {typeIcons[note.contentType] || typeIcons.note}
+                </span>
+                {proj && (
+                  <span style={{ fontSize: 10.5, color: proj.color, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: proj.color, display: 'inline-block' }}/>
+                    {proj.name}
+                  </span>
+                )}
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: t.textMuted }}>{formatDate(note.updatedAt)}</span>
+              </div>
+              {(note.tags || []).length > 0 && (
+                <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+                  {note.tags.map(tag => (
+                    <span key={tag} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 10, background: t.tagBg, color: t.tagText, fontWeight: 500 }}>#{tag}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Editor ────────────────────────────────────────────────────────────────────
+function Editor({ theme: t, note, projects, onUpdateNote, onDeleteNote, onTriggerAI }) {
+  const [mode, setMode] = React.useState('edit');
+  const [title, setTitle] = React.useState('');
+  const [content, setContent] = React.useState('');
+  const [tagInput, setTagInput] = React.useState('');
+  const [addingTag, setAddingTag] = React.useState(false);
+  const saveTimer = React.useRef(null);
+
+  React.useEffect(() => {
+    if (note) { setTitle(note.title || ''); setContent(note.content || ''); }
+  }, [note?.id]);
+
+  const triggerSave = (newTitle, newContent) => {
+    if (!note) return;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      onUpdateNote({ ...note, title: newTitle, content: newContent, updatedAt: new Date().toISOString() });
+    }, 600);
+  };
+
+  const handlePaste = e => {
+    setTimeout(() => {
+      const val = e.target.value;
+      onTriggerAI({ type: 'paste', content: val, contentType: detectContentType(val) });
+    }, 50);
+  };
+
+  const handleAddTag = tag => {
+    const cleaned = tag.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+    if (!cleaned) return;
+    const tags = [...(note.tags || [])];
+    if (!tags.includes(cleaned)) onUpdateNote({ ...note, tags: [...tags, cleaned], updatedAt: new Date().toISOString() });
+    setTagInput(''); setAddingTag(false);
+  };
+
+  if (!note) return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, background: t.bg, color: t.textMuted }}>
+      <span style={{ opacity: 0.3, fontSize: 32 }}>✦</span>
+      <div style={{ fontSize: 14 }}>Select a note or create a new one</div>
+    </div>
+  );
+
+  const modeBtn = m => ({
+    padding: '4px 10px', fontSize: 12, borderRadius: 6, cursor: 'pointer',
+    border: `1px solid ${mode === m ? t.accent : t.border}`,
+    background: mode === m ? t.accentBg : 'none',
+    color: mode === m ? t.accent : t.textSecondary,
+    display: 'flex', alignItems: 'center', gap: 4,
+  });
+
+  const aiBtn = (danger = false) => ({
+    display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
+    fontSize: 11.5, borderRadius: 6, cursor: 'pointer', fontWeight: 500,
+    border: danger ? '1px solid #fcc' : `1px solid ${t.aiBorder || t.border}`,
+    background: danger ? '#fff0f0' : t.accentBg,
+    color: danger ? '#e05' : t.accent,
+  });
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', background: t.bg, overflow: 'hidden' }}>
+      {/* Toolbar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderBottom: `1px solid ${t.border}`, background: t.bgPanel }}>
+        <button style={modeBtn('edit')} onClick={() => setMode('edit')}><Icons.Edit /> Edit</button>
+        <button style={modeBtn('preview')} onClick={() => setMode('preview')}><Icons.Eye /> Preview</button>
+        <div style={{ flex: 1 }}/>
+        <button style={aiBtn()} onClick={() => onTriggerAI({ type: 'summarize', content, contentType: note.contentType })}><Icons.Sparkle /> Summarize</button>
+        <button style={aiBtn()} onClick={() => onTriggerAI({ type: 'actions', content, contentType: note.contentType })}><Icons.AI /> Actions</button>
+        <button style={aiBtn(true)} onClick={() => onDeleteNote(note.id)} title="Delete note"><Icons.Trash /></button>
+      </div>
+
+      {/* Title */}
+      <input
+        style={{ width: '100%', fontSize: 22, fontWeight: 680, color: t.text, background: 'none', border: 'none', outline: 'none', lineHeight: 1.3, letterSpacing: '-0.4px', padding: '20px 24px 0', fontFamily: 'inherit' }}
+        placeholder="Note title..."
+        value={title}
+        onChange={e => { setTitle(e.target.value); triggerSave(e.target.value, content); }}
+      />
+
+      {/* Body */}
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {mode === 'edit' ? (
+          <textarea
+            style={{ flex: 1, width: '100%', padding: '14px 24px 24px', background: 'none', border: 'none', outline: 'none', resize: 'none', color: t.text, boxSizing: 'border-box' }}
+            placeholder="Start writing… paste Slack messages, AI outputs, or code snippets here."
+            value={content}
+            onChange={e => { setContent(e.target.value); triggerSave(title, e.target.value); }}
+            onPaste={handlePaste}
+          />
+        ) : (
+          <div
+            className="md-preview"
+            style={{ flex: 1, overflowY: 'auto', padding: '14px 24px 24px', color: t.text }}
+            dangerouslySetInnerHTML={{ __html: parseMarkdown(content) }}
+          />
+        )}
+      </div>
+
+      {/* Meta bar */}
+      <div style={{ padding: '8px 24px', borderTop: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', background: t.bgPanel }}>
+        <span style={{ fontSize: 11.5, color: t.textMuted }}>Project:</span>
+        <select
+          style={{ fontSize: 12, padding: '3px 8px', borderRadius: 6, border: `1px solid ${t.border}`, background: t.bgCard, color: t.textSecondary, outline: 'none', cursor: 'pointer' }}
+          value={note.projectId || ''}
+          onChange={e => onUpdateNote({ ...note, projectId: e.target.value || null, updatedAt: new Date().toISOString() })}
+        >
+          <option value="">— none —</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+
+        <span style={{ fontSize: 11.5, color: t.textMuted, marginLeft: 6 }}>Tags:</span>
+        {(note.tags || []).map(tag => (
+          <span key={tag} style={{ fontSize: 11, padding: '2px 7px', borderRadius: 10, background: t.tagBg, color: t.tagText, display: 'flex', alignItems: 'center', gap: 4 }}>
+            #{tag}
+            <button onClick={() => onUpdateNote({ ...note, tags: note.tags.filter(t2 => t2 !== tag), updatedAt: new Date().toISOString() })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.tagText, padding: 0, lineHeight: 1 }}>×</button>
+          </span>
+        ))}
+        {addingTag ? (
+          <input autoFocus
+            style={{ fontSize: 12, padding: '2px 7px', borderRadius: 10, border: `1px solid ${t.accent}`, background: t.bgCard, color: t.text, outline: 'none', width: 80 }}
+            placeholder="tag..."
+            value={tagInput}
+            onChange={e => setTagInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAddTag(tagInput); if (e.key === 'Escape') setAddingTag(false); }}
+            onBlur={() => { if (!tagInput) setAddingTag(false); }}
+          />
+        ) : (
+          <button onClick={() => setAddingTag(true)} style={{ fontSize: 11, color: t.textMuted, background: 'none', border: `1px dashed ${t.border}`, borderRadius: 10, padding: '2px 8px', cursor: 'pointer' }}>+ tag</button>
+        )}
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: t.textMuted }}>
+          {content.split(/\s+/).filter(Boolean).length} words · {formatDate(note.updatedAt)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── AIPanel ───────────────────────────────────────────────────────────────────
+function AIPanel({ theme: t, trigger, note, projects, notes, aiProvider, onApplyTag, onApplyProject, onApplySummary }) {
+  const [loading, setLoading] = React.useState(false);
+  const [result, setResult] = React.useState(null);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchResults, setSearchResults] = React.useState(null);
+  const [searching, setSearching] = React.useState(false);
+  const prevTrigger = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!trigger) return;
+    const key = JSON.stringify(trigger);
+    if (prevTrigger.current === key) return;
+    prevTrigger.current = key;
+    run(trigger);
+  }, [trigger]);
+
+  const run = async trig => {
+    if (!trig?.content?.trim()) return;
+    setLoading(true); setResult(null);
+    try {
+      if (trig.type === 'paste')     await analyzePaste(trig);
+      if (trig.type === 'summarize') await summarize(trig);
+      if (trig.type === 'actions')   await suggestActions(trig);
+    } catch (e) {
+      setResult({ type: 'error', data: e.message || 'AI unavailable — check your ANTHROPIC_API_KEY.' });
+    }
+    setLoading(false);
+  };
+
+  const parseJSON = raw => {
+    const m = raw.match(/\{[\s\S]*\}/);
+    return JSON.parse(m ? m[0] : raw);
+  };
+
+  const analyzePaste = async ({ content, contentType }) => {
+    const projectNames = projects.map(p => p.name).join(', ');
+    const raw = await claude.complete(`You are a smart note organizer. Analyze this pasted content and respond with ONLY valid JSON (no markdown):
+{"contentType":"slack|ai|code|note","suggestedProject":"one of: ${projectNames} or null","suggestedTags":["tag1","tag2"],"summary":"1-2 sentence summary","insight":"one short helpful observation"}
+
+Content:\n${content.slice(0, 1200)}`);
+    let data; try { data = parseJSON(raw); } catch { data = { summary: raw, suggestedTags: [], insight: '' }; }
+    setResult({ type: 'paste', data });
+  };
+
+  const summarize = async ({ content }) => {
+    const raw = await claude.complete(`Summarize this note content. Return ONLY valid JSON:
+{"summary":"3-5 sentence summary","keyPoints":["point1","point2","point3"],"contentType":"slack|ai|code|note"}
+
+Content:\n${content.slice(0, 2000)}`);
+    let data; try { data = parseJSON(raw); } catch { data = { summary: raw, keyPoints: [] }; }
+    setResult({ type: 'summary', data });
+  };
+
+  const suggestActions = async ({ content }) => {
+    const raw = await claude.complete(`Based on this note, suggest concrete follow-up actions. Return ONLY valid JSON:
+{"actions":[{"label":"action text","priority":"high|medium|low"}],"observation":"one sentence about what needs to be done"}
+
+Content:\n${content.slice(0, 1500)}`);
+    let data; try { data = parseJSON(raw); } catch { data = { actions: [], observation: raw }; }
+    setResult({ type: 'actions', data });
+  };
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setSearching(true); setSearchResults(null);
+    try {
+      const notesSummary = notes.slice(0, 20).map(n =>
+        `ID:${n.id} TITLE:"${n.title}" PREVIEW:"${n.content.slice(0, 150).replace(/\n/g, ' ')}"`
+      ).join('\n');
+      const raw = await claude.complete(`User is searching their notes for: "${searchQuery}"\n\nNotes:\n${notesSummary}\n\nReturn ONLY valid JSON:\n{"results":[{"id":"note_id","reason":"why this matches"}],"answer":"direct answer or null"}`);
+      let data; try { data = parseJSON(raw); } catch { data = { results: [], answer: raw }; }
+      const resolved = (data.results || []).map(r => ({ ...r, note: notes.find(n => n.id === r.id) })).filter(r => r.note);
+      setSearchResults({ ...data, results: resolved });
+    } catch (e) {
+      setSearchResults({ results: [], answer: 'Search unavailable.' });
+    }
+    setSearching(false);
+  };
+
+  const labelStyle = { fontSize: 11, fontWeight: 600, color: t.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 };
+  const chipStyle = color => ({
+    display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 20,
+    fontSize: 11.5, fontWeight: 500, background: t.accentBg, color: color || t.accent,
+    border: `1px solid ${t.aiBorder || t.border}`, cursor: 'pointer', marginRight: 6, marginBottom: 6,
+  });
+  const priorityColor = { high: '#e05', medium: t.accent, low: t.textMuted };
+
+  return (
+    <div style={{ width: 280, minWidth: 280, borderLeft: `1px solid ${t.aiBorder || t.border}`, background: t.aiPanel, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '14px 16px 10px', borderBottom: `1px solid ${t.aiBorder || t.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ color: t.accent }}><Icons.Sparkle /></span>
+        <span style={{ fontSize: 13, fontWeight: 650, color: t.text }}>AI Assistant</span>
+        <span style={{ marginLeft: 'auto', fontSize: 10.5, color: t.textMuted, background: t.accentBg, borderRadius: 10, padding: '2px 7px' }}>
+          {aiProvider?.provider === 'openrouter' ? 'OpenRouter' : aiProvider?.provider === 'anthropic' ? 'Anthropic' : 'No AI key'}
+        </span>
+      </div>
+
+      {/* Smart Search */}
+      <div style={{ padding: '14px 16px', borderBottom: `1px solid ${t.aiBorder || t.border}` }}>
+        <div style={labelStyle}>Smart Search</div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: 8, padding: '6px 10px' }}>
+          <input
+            style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontSize: 12.5, color: t.text }}
+            placeholder="Ask anything about your notes..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+          />
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: searching ? t.textMuted : t.accent, display: 'flex' }} onClick={handleSearch}>
+            {searching ? <span style={{ fontSize: 11 }}>…</span> : <Icons.Send />}
+          </button>
+        </div>
+        {searchResults && (
+          <div style={{ marginTop: 10 }}>
+            {searchResults.answer && (
+              <div style={{ fontSize: 12.5, color: t.text, lineHeight: 1.55, background: t.bgCard, borderRadius: 8, padding: '9px 11px', border: `1px solid ${t.border}`, marginBottom: 8 }}>
+                {searchResults.answer}
+              </div>
+            )}
+            {searchResults.results.map((r, i) => (
+              <div key={i} style={{ fontSize: 12, color: t.textSecondary, padding: '6px 0', borderBottom: i < searchResults.results.length - 1 ? `1px solid ${t.border}` : 'none' }}>
+                <div style={{ fontWeight: 580, color: t.text }}>{r.note?.title}</div>
+                <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2 }}>{r.reason}</div>
+              </div>
+            ))}
+            {searchResults.results.length === 0 && !searchResults.answer && (
+              <div style={{ fontSize: 12, color: t.textMuted, marginTop: 4 }}>No relevant notes found.</div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Results */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {loading && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, color: t.textMuted, textAlign: 'center', gap: 10, marginTop: 40 }}>
+            <div style={{ fontSize: 22, animation: 'spin 1s linear infinite', display: 'inline-block' }}>✦</div>
+            <div style={{ fontSize: 12.5 }}>Analyzing…</div>
+          </div>
+        )}
+
+        {!loading && !result && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, color: t.textMuted, textAlign: 'center', gap: 10, marginTop: 40 }}>
+            <span style={{ opacity: 0.3, fontSize: 28 }}>✦</span>
+            <div style={{ fontSize: 12.5, lineHeight: 1.6 }}>Paste content or click <strong>Summarize</strong> / <strong>Actions</strong> to get AI suggestions</div>
+            <div style={{ fontSize: 11, marginTop: 4 }}>Auto-detects Slack, AI outputs, and code</div>
+          </div>
+        )}
+
+        {!loading && result?.type === 'paste' && (
+          <div style={{ padding: 16 }}>
+            <div style={labelStyle}>Detected Type</div>
+            <div style={{ marginBottom: 14 }}>
+              <span style={chipStyle()}>
+                {result.data.contentType === 'slack' && <><Icons.Slack /> Slack message</>}
+                {result.data.contentType === 'ai'    && <><Icons.AI /> AI output</>}
+                {result.data.contentType === 'code'  && <><Icons.Code /> Code snippet</>}
+                {result.data.contentType === 'note'  && <><Icons.Note /> Note</>}
+              </span>
+            </div>
+
+            {result.data.summary && (
+              <>
+                <div style={labelStyle}>Summary</div>
+                <div style={{ fontSize: 12.5, color: t.text, lineHeight: 1.6, background: t.bgCard, borderRadius: 8, padding: '9px 11px', border: `1px solid ${t.border}`, marginBottom: 14 }}>{result.data.summary}</div>
+              </>
+            )}
+
+            {result.data.suggestedProject && (() => {
+              const proj = projects.find(p => p.name.toLowerCase() === result.data.suggestedProject?.toLowerCase());
+              return proj ? (
+                <>
+                  <div style={labelStyle}>Suggested Project</div>
+                  <div style={{ marginBottom: 14 }}>
+                    <button onClick={() => onApplyProject(proj.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: `1px solid ${t.border}`, background: t.bgCard, cursor: 'pointer', fontSize: 12.5, color: t.text, width: '100%' }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = t.accent}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = t.border}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: proj.color, display: 'inline-block' }}/>
+                      Move to <strong>{proj.name}</strong>
+                      <span style={{ marginLeft: 'auto', fontSize: 10, color: t.accent }}>Apply →</span>
+                    </button>
+                  </div>
+                </>
+              ) : null;
+            })()}
+
+            {result.data.suggestedTags?.length > 0 && (
+              <>
+                <div style={labelStyle}>Suggested Tags</div>
+                <div style={{ marginBottom: 14 }}>
+                  {result.data.suggestedTags.map(tag => (
+                    <button key={tag} onClick={() => onApplyTag(tag)} style={chipStyle(t.tagText)}><Icons.Tag /> #{tag}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {result.data.insight && (
+              <>
+                <div style={labelStyle}>Insight</div>
+                <div style={{ fontSize: 12, color: t.textSecondary, lineHeight: 1.6, fontStyle: 'italic', borderLeft: `2px solid ${t.accent}`, paddingLeft: 10 }}>{result.data.insight}</div>
+              </>
+            )}
+          </div>
+        )}
+
+        {!loading && result?.type === 'summary' && (
+          <div style={{ padding: 16 }}>
+            <div style={labelStyle}>Summary</div>
+            <div style={{ fontSize: 12.5, color: t.text, lineHeight: 1.65, background: t.bgCard, borderRadius: 8, padding: '10px 12px', border: `1px solid ${t.border}`, marginBottom: 14 }}>{result.data.summary}</div>
+            {result.data.keyPoints?.length > 0 && (
+              <>
+                <div style={labelStyle}>Key Points</div>
+                <ul style={{ margin: 0, padding: '0 0 0 16px' }}>
+                  {result.data.keyPoints.map((pt, i) => <li key={i} style={{ fontSize: 12.5, color: t.textSecondary, marginBottom: 6, lineHeight: 1.5 }}>{pt}</li>)}
+                </ul>
+              </>
+            )}
+            <button onClick={() => onApplySummary(result.data.summary)}
+              style={{ marginTop: 14, width: '100%', padding: 7, fontSize: 12, background: t.accentBg, color: t.accent, border: `1px solid ${t.aiBorder || t.border}`, borderRadius: 8, cursor: 'pointer', fontWeight: 500 }}>
+              Insert summary into note
+            </button>
+          </div>
+        )}
+
+        {!loading && result?.type === 'actions' && (
+          <div style={{ padding: 16 }}>
+            {result.data.observation && (
+              <>
+                <div style={labelStyle}>Observation</div>
+                <div style={{ fontSize: 12, color: t.textSecondary, lineHeight: 1.6, fontStyle: 'italic', borderLeft: `2px solid ${t.accent}`, paddingLeft: 10, marginBottom: 14 }}>{result.data.observation}</div>
+              </>
+            )}
+            <div style={labelStyle}>Suggested Actions</div>
+            {(result.data.actions || []).map((action, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 10px', borderRadius: 8, marginBottom: 6, background: t.bgCard, border: `1px solid ${t.border}` }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', marginTop: 5, flexShrink: 0, background: priorityColor[action.priority] || t.textMuted }}/>
+                <span style={{ fontSize: 12.5, color: t.text, lineHeight: 1.5 }}>{action.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!loading && result?.type === 'error' && (
+          <div style={{ padding: 16, color: '#e05', fontSize: 12.5, lineHeight: 1.6 }}>{result.data}</div>
+        )}
+      </div>
+
+      <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+function App() {
+  const TWEAK_DEFAULTS = { theme: 'light', fontFamily: 'DM Sans', fontSize: 14, showAIPanel: true };
+  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const theme = tweaks.theme === 'dark' ? darkTheme : lightTheme;
+
+  const [projects, setProjects] = React.useState([]);
+  const [notes, setNotes]       = React.useState([]);
+  const [loading, setLoading]   = React.useState(true);
+  const [selectedNoteId, setSelectedNoteId] = React.useState(null);
+  const [selectedProject, setSelectedProject] = React.useState(null);
+  const [selectedTag, setSelectedTag]         = React.useState(null);
+  const [searchQuery, setSearchQuery]         = React.useState('');
+  const [aiTrigger, setAiTrigger]             = React.useState(null);
+  const [aiProvider, setAiProvider]           = React.useState(null);
+
+  // Load from API on mount
+  React.useEffect(() => {
+    Promise.all([
+      api.get('/api/projects'),
+      api.get('/api/notes'),
+      api.get('/api/provider'),
+    ]).then(([p, n, prov]) => {
+      setProjects(p); setNotes(n); setAiProvider(prov); setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const filteredNotes = React.useMemo(() => {
+    let list = [...notes];
+    if (selectedProject) list = list.filter(n => n.projectId === selectedProject);
+    if (selectedTag)     list = list.filter(n => (n.tags || []).includes(selectedTag));
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(n => n.title?.toLowerCase().includes(q) || n.content?.toLowerCase().includes(q) || (n.tags||[]).some(t => t.includes(q)));
+    }
+    return list.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  }, [notes, selectedProject, selectedTag, searchQuery]);
+
+  const selectedNote = notes.find(n => n.id === selectedNoteId) || null;
+
+  const handleNewNote = () => {
+    const note = { id: generateId(), title: '', content: '', projectId: selectedProject || projects[0]?.id || null, tags: [], contentType: 'note', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    setNotes(prev => [note, ...prev]);
+    setSelectedNoteId(note.id);
+    api.post('/api/notes', note).catch(console.error);
+  };
+
+  const handleUpdateNote = updated => {
+    setNotes(prev => prev.map(n => n.id === updated.id ? updated : n));
+    api.put(`/api/notes/${updated.id}`, updated).catch(console.error);
+  };
+
+  const handleDeleteNote = id => {
+    setNotes(prev => prev.filter(n => n.id !== id));
+    if (selectedNoteId === id) setSelectedNoteId(null);
+    api.del(`/api/notes/${id}`).catch(console.error);
+  };
+
+  const handleNewProject = p => {
+    setProjects(prev => [...prev, p]);
+    api.post('/api/projects', p).catch(console.error);
+  };
+
+  const handleApplyTag = tag => {
+    if (!selectedNote) return;
+    const tags = [...(selectedNote.tags || [])];
+    if (!tags.includes(tag)) handleUpdateNote({ ...selectedNote, tags: [...tags, tag], updatedAt: new Date().toISOString() });
+  };
+
+  const handleApplyProject = projectId => {
+    if (!selectedNote) return;
+    handleUpdateNote({ ...selectedNote, projectId, updatedAt: new Date().toISOString() });
+  };
+
+  const handleApplySummary = summary => {
+    if (!selectedNote) return;
+    handleUpdateNote({ ...selectedNote, content: selectedNote.content + '\n\n---\n**Summary:** ' + summary, updatedAt: new Date().toISOString() });
+  };
+
+  const fontMap = { 'DM Sans': "'DM Sans', sans-serif", 'Inter': "'Inter', sans-serif", 'Lato': "'Lato', sans-serif" };
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: theme.bg }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, color: theme.textMuted }}>
+        <div style={{ fontSize: 24, animation: 'spin 1s linear infinite' }}>✦</div>
+        <div style={{ fontSize: 13 }}>Loading NoteFlow…</div>
+      </div>
+      <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
+    </div>
+  );
+
+  return (
+    <div
+      data-theme={tweaks.theme}
+      style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: fontMap[tweaks.fontFamily] || fontMap['DM Sans'], fontSize: tweaks.fontSize, background: theme.bg, color: theme.text }}
+    >
+      <Sidebar
+        theme={theme} projects={projects} notes={notes}
+        selectedProject={selectedProject} selectedTag={selectedTag}
+        onSelectProject={setSelectedProject} onSelectTag={setSelectedTag}
+        onNewProject={handleNewProject} onNewNote={handleNewNote}
+        searchQuery={searchQuery} onSearch={setSearchQuery}
+      />
+      <NoteList
+        theme={theme} notes={filteredNotes} selectedNote={selectedNote}
+        onSelectNote={n => setSelectedNoteId(n.id)} projects={projects}
+      />
+      <Editor
+        theme={theme} note={selectedNote} projects={projects}
+        onUpdateNote={handleUpdateNote} onDeleteNote={handleDeleteNote}
+        onTriggerAI={setAiTrigger}
+      />
+      {tweaks.showAIPanel && (
+        <AIPanel
+          theme={theme} trigger={aiTrigger} note={selectedNote}
+          projects={projects} notes={notes} aiProvider={aiProvider}
+          onApplyTag={handleApplyTag} onApplyProject={handleApplyProject}
+          onApplySummary={handleApplySummary}
+        />
+      )}
+      <TweaksPanel title="Settings">
+        <TweakSection label="Appearance" />
+        <TweakRadio  label="Theme"     value={tweaks.theme}      options={['light','dark']}              onChange={v => setTweak('theme', v)} />
+        <TweakSelect label="Font"      value={tweaks.fontFamily} options={['DM Sans','Inter','Lato']}    onChange={v => setTweak('fontFamily', v)} />
+        <TweakSlider label="Font size" value={tweaks.fontSize}   min={12} max={18} step={1} unit="px"   onChange={v => setTweak('fontSize', v)} />
+        <TweakSection label="Layout" />
+        <TweakToggle label="Show AI panel" value={tweaks.showAIPanel} onChange={v => setTweak('showAIPanel', v)} />
+      </TweaksPanel>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+
+  </script>
+</body>
+</html>

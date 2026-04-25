@@ -1,0 +1,16 @@
+# secrets — never commit
+.env
+.env.local
+.env.*.local
+
+# dependencies
+node_modules/
+
+# SQLite database & runtime data
+data/
+
+# macOS
+.DS_Store
+
+# editor
+.claude/
