@@ -1,16 +1,86 @@
-# secrets — never commit
-.env
-.env.local
-.env.*.local
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
 
-# dependencies
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+coverage
+*.lcov
+.nyc_output
+
+# Dependency directories
 node_modules/
+jspm_packages/
+bower_components/
 
-# SQLite database & runtime data
+# Build output
+build/Release
+dist
+.next
+out
+.nuxt
+.output
+.vuepress/dist
+.svelte-kit/
+**/.vitepress/dist
+**/.vitepress/cache
+.docusaurus
+lib-cov
+
+# Cache
+.cache
+.parcel-cache
+.npm
+.eslintcache
+.stylelintcache
+.fusebox/
+.firebase/
+.serverless/
+.dynamodb/
+.grunt
+.vite/
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+web_modules/
+*.tsbuildinfo
+
+# dotenv — secrets never committed
+.env
+.env.*
+!.env.example
+
+# SQLite database & runtime data (NoteFlow)
 data/
 
 # macOS
 .DS_Store
 
-# editor
+# Editor
 .claude/
+.vscode-test
+
+# Yarn / pnpm
+.yarn-integrity
+.pnpm-store
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# Misc
+*.tgz
+.node_repl_history
+.lock-wscript
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
